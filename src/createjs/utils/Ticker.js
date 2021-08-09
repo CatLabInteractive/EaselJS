@@ -428,14 +428,9 @@ this.createjs = this.createjs||{};
 	 * @static
 	 **/
 	Ticker.reset = function() {
-		if (Ticker._raf) {
-			var f = window.cancelAnimationFrame || window.webkitCancelAnimationFrame || window.mozCancelAnimationFrame || window.oCancelAnimationFrame || window.msCancelAnimationFrame;
-			f&&f(Ticker._timerId);
-		} else {
-			clearTimeout(Ticker._timerId);
-		}
+		Ticker._destroyTick();
 		Ticker.removeAllEventListeners("tick");
-		Ticker._timerId = Ticker._times = Ticker._tickTimes = null;
+		Ticker._times = Ticker._tickTimes = null;
 		Ticker._startTime = Ticker._lastTime = Ticker._ticks = Ticker._pausedTime = 0;
 		Ticker._inited = false;
 	};
@@ -526,6 +521,50 @@ this.createjs = this.createjs||{};
 		return  Ticker._ticks - (pauseable ? Ticker._pausedTicks : 0);
 	};
 
+	/**
+	 * Try to sync up the ticker with a video element
+	 * @param video
+	 */
+	Ticker.synchronizeVideo = function(video) {
+		if (!'requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+			return false;
+		}
+
+		Ticker._synchronizedVideo = video;
+
+		// is the video playing? then instantly remove the scheduled tick and switch to requestVideoFrameCallback
+		if (!!(this.currentTime > 0 && !this.paused && !this.ended && this.readyState > 2)) {
+			Ticker._destroyTick();
+		}
+
+		Ticker._synchronizedVideoFrameCallback = video.requestVideoFrameCallback(Ticker._handleVideoFrame);
+		return true;
+	};
+
+	Ticker.stopVideoSynchronization = function() {
+		if (!Ticker._synchronizedVideo) {
+			return;
+		}
+
+		if (Ticker._synchronizedVideoFrameCallback) {
+			Ticker._synchronizedVideo.cancelVideoFrameCallback(Ticker._synchronizedVideoFrameCallback)
+		}
+
+		Ticker._synchronizedVideo = null;
+		Ticker._setupTick();
+	};
+
+	Ticker._handleVideoFrame = function() {
+		// make sure to destroy the regular tick to avoid duplicated
+		Ticker._destroyTick();
+		Ticker._tick();
+
+		if (Ticker._synchronizedVideo) {
+			Ticker._synchronizedVideoFrameCallback =
+				Ticker._synchronizedVideo.requestVideoFrameCallback(Ticker._handleVideoFrame);
+		}
+	};
+
 
 // private static methods:
 	/**
@@ -584,6 +623,20 @@ this.createjs = this.createjs||{};
 		}
 		Ticker._raf = false;
 		Ticker._timerId = setTimeout(Ticker._handleTimeout, Ticker._interval);
+	};
+
+	Ticker._destroyTick = function() {
+		if (Ticker._timerId === null) {
+			return;
+		}
+
+		if (Ticker._raf) {
+			var f = window.cancelAnimationFrame || window.webkitCancelAnimationFrame || window.mozCancelAnimationFrame || window.oCancelAnimationFrame || window.msCancelAnimationFrame;
+			f&&f(Ticker._timerId);
+		} else {
+			clearTimeout(Ticker._timerId);
+		}
+		Ticker._timerId = null;
 	};
 
 	/**
