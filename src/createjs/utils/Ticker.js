@@ -526,7 +526,7 @@ this.createjs = this.createjs||{};
 	 * @param video
 	 */
 	Ticker.synchronizeVideo = function(video) {
-		if (!'requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+		if (! ('requestVideoFrameCallback' in HTMLVideoElement.prototype)) {
 			return false;
 		}
 
